@@ -22,6 +22,7 @@ import (
 	"github.com/ksred/klear-api/internal/settlement"
 	"github.com/ksred/klear-api/internal/trading"
 	"github.com/ksred/klear-api/internal/types"
+	"github.com/ksred/klear-api/pkg/middleware"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
@@ -50,10 +51,10 @@ func init() {
 
 // routeStats tracks performance statistics for an API endpoint
 type routeStats struct {
-	name        string
-	durations   []time.Duration
-	totalCalls  int
-	failures    int
+	name       string
+	durations  []time.Duration
+	totalCalls int
+	failures   int
 }
 
 // addDuration records a new duration measurement for the route
@@ -116,12 +117,12 @@ func newSimulationClient() (*simulationClient, error) {
 		baseURL: serverAddress,
 		client:  client,
 		stats: map[string]*routeStats{
-			"auth":       {name: "Authentication"},
-			"create":     {name: "Create Order"},
-			"execute":    {name: "Execute Order"},
-			"get":        {name: "Get Order"},
-			"clear":      {name: "Clear Trade"},
-			"settle":     {name: "Settle Trade"},
+			"auth":    {name: "Authentication"},
+			"create":  {name: "Create Order"},
+			"execute": {name: "Execute Order"},
+			"get":     {name: "Get Order"},
+			"clear":   {name: "Clear Trade"},
+			"settle":  {name: "Settle Trade"},
 		},
 	}
 
@@ -167,13 +168,28 @@ func (sc *simulationClient) authenticate() (string, error) {
 	}
 
 	var result struct {
-		Token string `json:"jwt_token"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return "", err
+		Success bool `json:"success"`
+		Data    struct {
+			Token      string    `json:"jwt_token"`
+			Expiration time.Time `json:"expiration"`
+		} `json:"data"`
 	}
 
-	return result.Token, nil
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read response body: %w", err)
+	}
+	log.Debug().Str("response", string(respBody)).Msg("Auth response")
+
+	// Decode JSON into result struct first
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return "", fmt.Errorf("failed to decode response: %w, body: %s", err, string(respBody))
+	}
+
+	// Now log the token after it's been decoded
+	log.Debug().Str("auth_header", fmt.Sprintf("Bearer %s", result.Data.Token)).Msg("Auth header value")
+
+	return result.Data.Token, nil
 }
 
 // createOrder submits a new order to the API
@@ -181,7 +197,7 @@ func (sc *simulationClient) authenticate() (string, error) {
 func (sc *simulationClient) createOrder(order *types.Order) (string, error) {
 	start := time.Now()
 	defer func() {
-			sc.stats["create"].addDuration(time.Since(start))
+		sc.stats["create"].addDuration(time.Since(start))
 	}()
 
 	body, err := json.Marshal(order)
@@ -311,6 +327,8 @@ func (sc *simulationClient) getOrder(orderID string) (*types.Order, error) {
 	}
 
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", sc.authToken))
+	log.Debug().Str("auth_header", fmt.Sprintf("Bearer %s", sc.authToken)).Msg("Auth header value")
+	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := sc.client.Do(req)
 	if err != nil {
@@ -563,6 +581,10 @@ func main() {
 			stats.Sides[order.Side]++
 		}
 
+		if err != nil {
+			log.Error().Err(err).Str("order_id", orderID).Msg("Failed to get order")
+		}
+
 		log.Info().
 			Str("order_id", orderID).
 			Str("execution_id", execution.ExecutionID).
@@ -669,7 +691,7 @@ Duration:         %v
 func createOrdersHTTP(workerID, numOrders int, simClient *simulationClient, ordersChan chan<- string) {
 	for i := 0; i < numOrders; i++ {
 		order := &types.Order{
-			ClientID:  fmt.Sprintf("CLIENT_%d", workerID),
+			ClientID:  auth.TestAPIKey,
 			Symbol:    symbols[rand.Intn(len(symbols))],
 			Side:      sides[rand.Intn(len(sides))],
 			OrderType: "MARKET",
@@ -753,6 +775,7 @@ func setupRoutes(
 
 		// Order routes
 		orders := v1.Group("/orders")
+		orders.Use(middleware.JWTAuth())
 		{
 			orders.POST("", tradingHandlers.CreateOrderHandler())
 			orders.GET("/:order_id", tradingHandlers.GetOrderStatusHandler())

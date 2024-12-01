@@ -97,28 +97,18 @@ func RateLimit() gin.HandlerFunc {
 
 func JWTAuth() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		authHeader := c.GetHeader("Authorization")
-		if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
-			response.Unauthorized(c, "Missing or invalid authorization header")
-			c.Abort()
-			return
-		}
-
-		bearerToken := strings.Split(authHeader, " ")
-		if len(bearerToken) != 2 || strings.ToLower(bearerToken[0]) != "bearer" {
-			response.Unauthorized(c, "Invalid authorization header format")
+		bearerToken := strings.Split(c.GetHeader("Authorization"), " ")
+		if len(bearerToken) != 2 {
+			response.Unauthorized(c, "Invalid authorization header")
 			c.Abort()
 			return
 		}
 
 		tokenString := bearerToken[1]
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-			// Verify signing method
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 			}
-
-			// TODO: Move this to configuration
 			return []byte("klear-secret-key"), nil
 		})
 
@@ -135,10 +125,27 @@ func JWTAuth() gin.HandlerFunc {
 			return
 		}
 
-		// Store claims in context for later use
-		c.Set("clientID", claims["client_id"])
-		c.Set("claims", claims)
+		// Ensure required claims exist
+		requiredClaims := []string{"client_id", "exp"}
+		for _, claim := range requiredClaims {
+			if _, exists := claims[claim]; !exists {
+				response.Unauthorized(c, fmt.Sprintf("Missing required claim: %s", claim))
+				c.Abort()
+				return
+			}
+		}
 
+		// Set individual claims in the context
+		for key, value := range claims {
+			c.Set(key, value)
+		}
+		
+		// Also set the full claims object and explicit client_id
+		c.Set("claims", claims)
+		if clientID, ok := claims["client_id"].(string); ok {
+			c.Set("clientID", clientID)
+		}
+		
 		c.Next()
 	}
 }

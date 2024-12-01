@@ -11,12 +11,12 @@ import (
 
 var (
 	ErrInvalidCredentials = errors.New("invalid API credentials")
-	ErrTokenGeneration   = errors.New("failed to generate token")
+	ErrTokenGeneration    = errors.New("failed to generate token")
 )
 
 // Test credentials
 var (
-	TestAPIKey = "test-api-key"
+	TestAPIKey    = "test-api-key"
 	TestAPISecret = "test-api-secret"
 )
 
@@ -73,7 +73,7 @@ func (s *Service) GenerateToken(creds Credentials) (*TokenResponse, error) {
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			NotBefore: jwt.NewNumericDate(time.Now()),
 		},
-		ClientID:    creds.APIKey, // Using API key as client ID for simplicity
+		ClientID:    creds.APIKey,      // Using API key as client ID for simplicity
 		Permissions: []string{"trade"}, // Default permission
 	}
 
@@ -155,3 +155,13 @@ func (h *GinHandlers) GenerateTokenHandler() gin.HandlerFunc {
 	}
 }
 
+// GetClientID extracts the client ID from a JWT token
+// Returns empty string if client ID is not found or invalid
+func GetClientID(claims interface{}) string {
+	if jwtClaims, ok := claims.(jwt.MapClaims); ok {
+		if clientID, ok := jwtClaims["client_id"].(string); ok {
+			return clientID
+		}
+	}
+	return ""
+}

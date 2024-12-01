@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/ksred/klear-api/internal/auth"
 	"github.com/ksred/klear-api/internal/exchange"
 	"github.com/ksred/klear-api/internal/types"
 	"github.com/ksred/klear-api/pkg/response"
@@ -59,6 +60,11 @@ func (s *Service) CreateOrder(order *types.Order, idempotencyKey string) error {
 // GetOrder retrieves an order by its ID
 func (s *Service) GetOrder(orderID string) (*types.Order, error) {
 	return s.db.GetOrder(orderID)
+}
+
+// GetOrderByOrderIDAndClientID retrieves an order by its ID and client ID
+func (s *Service) GetOrderByOrderIDAndClientID(orderID, clientID string) (*types.Order, error) {
+	return s.db.GetOrderByOrderIDAndClientID(orderID, clientID)
 }
 
 // ExecuteOrder executes an existing order with idempotency support
@@ -154,9 +160,27 @@ func (h *GinHandlers) CreateOrderHandler() gin.HandlerFunc {
 // URL parameter: order_id
 func (h *GinHandlers) GetOrderStatusHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		orderID := c.Param("order_id")
+		// Get claims from context
+		claims, exists := c.Get("claims")
+		if !exists {
+			response.Unauthorized(c, "Missing authentication claims")
+			return
+		}
 
-		order, err := h.service.GetOrder(orderID)
+		// Get client ID from claims
+		clientID := auth.GetClientID(claims)
+		if clientID == "" {
+			response.Unauthorized(c, "Invalid client ID in token")
+			return
+		}
+
+		orderID := c.Param("order_id")
+		if orderID == "" {
+			response.BadRequest(c, "Order ID is required")
+			return
+		}
+
+		order, err := h.service.GetOrderByOrderIDAndClientID(orderID, clientID)
 		if err != nil || order == nil {
 			response.NotFound(c, "Order not found")
 			return

@@ -31,6 +31,17 @@ func (d *Database) GetOrder(orderID string) (*types.Order, error) {
 	return &order, nil
 }
 
+func (d *Database) GetOrderByOrderIDAndClientID(orderID, clientID string) (*types.Order, error) {
+	var order types.Order
+	if err := d.db.Where("order_id = ? AND client_id = ?", orderID, clientID).First(&order).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &order, nil
+}
+
 func (d *Database) UpdateOrder(order *types.Order) error {
 	return d.db.Save(order).Error
 }
