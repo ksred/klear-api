@@ -194,52 +194,6 @@ func (h *GinHandlers) SettleTradeHandler() gin.HandlerFunc {
 	}
 }
 
-// GetSettlementHandler handles GET requests to retrieve settlement details
-// Requires internal authentication
-// URL parameter: settlement_id
-func (h *GinHandlers) GetSettlementHandler() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		settlementID := c.Param("settlement_id")
-
-		settlement, err := h.service.GetSettlement(settlementID)
-		response.Handle(c, settlement, err)
-	}
-}
-
-func (h *GinHandlers) GetClientSettlementsHandler() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		clientID := c.GetHeader("X-Client-ID")
-		if clientID == "" {
-			response.BadRequest(c, "client ID is required")
-			return
-		}
-
-		settlements, err := h.service.GetClientSettlements(clientID)
-		response.Handle(c, settlements, err)
-	}
-}
-
-func (h *GinHandlers) UpdateSettlementStatusHandler() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		settlementID := c.Param("settlement_id")
-		var request struct {
-			Status string `json:"status" binding:"required"`
-		}
-
-		if err := c.ShouldBindJSON(&request); err != nil {
-			response.BadRequest(c, err.Error())
-			return
-		}
-
-		if err := h.service.UpdateSettlementStatus(settlementID, request.Status); err != nil {
-			response.Handle(c, nil, err)
-			return
-		}
-
-		response.Success(c, gin.H{"message": "settlement status updated successfully"})
-	}
-}
-
 // Add this method to the Service struct
 func (s *Service) GetDB() *Database {
 	return s.db

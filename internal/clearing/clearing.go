@@ -199,25 +199,8 @@ func (s *Service) calculateTradeNetting(execution *types.Execution, order *types
 		Time("window_end", netting.WindowEnd).
 		Msg("initialized netting record")
 
-	// Add current trade to netting calculations
-	tradeIDs := []string{execution.ExecutionID}
-	if order.Side == "BUY" {
-		netting.NetQuantity += execution.TotalQuantity
-		netting.NetAmount += execution.TotalQuantity * execution.AveragePrice
-		logger.Debug().
-			Float64("quantity", execution.TotalQuantity).
-			Float64("amount", execution.TotalQuantity*execution.AveragePrice).
-			Msg("added buy trade to netting")
-	} else {
-		netting.NetQuantity -= execution.TotalQuantity
-		netting.NetAmount -= execution.TotalQuantity * execution.AveragePrice
-		logger.Debug().
-			Float64("quantity", -execution.TotalQuantity).
-			Float64("amount", -execution.TotalQuantity*execution.AveragePrice).
-			Msg("added sell trade to netting")
-	}
-
 	// Process all trades for multilateral netting
+	tradeIDs := make([]string, 0, len(executions))
 	for _, exec := range executions {
 		ord, exists := orderMap[exec.OrderID]
 		if !exists {
@@ -236,7 +219,7 @@ func (s *Service) calculateTradeNetting(execution *types.Execution, order *types
 				Str("execution_id", exec.ExecutionID).
 				Float64("quantity", exec.TotalQuantity).
 				Float64("amount", exec.TotalQuantity*exec.AveragePrice).
-				Msg("added historical buy trade to netting")
+				Msg("added buy trade to netting")
 		} else {
 			netting.NetQuantity -= exec.TotalQuantity
 			netting.NetAmount -= exec.TotalQuantity * exec.AveragePrice
@@ -244,7 +227,7 @@ func (s *Service) calculateTradeNetting(execution *types.Execution, order *types
 				Str("execution_id", exec.ExecutionID).
 				Float64("quantity", -exec.TotalQuantity).
 				Float64("amount", -exec.TotalQuantity*exec.AveragePrice).
-				Msg("added historical sell trade to netting")
+				Msg("added sell trade to netting")
 		}
 	}
 
