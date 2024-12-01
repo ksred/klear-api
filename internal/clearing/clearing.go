@@ -5,12 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/ksred/klear-api/internal/types"
+	"github.com/ksred/klear-api/pkg/response"
 	"github.com/rs/zerolog/log"
 	"gorm.io/gorm"
 )
@@ -537,12 +537,7 @@ func (h *GinHandlers) ClearTradeHandler() gin.HandlerFunc {
 		tradeID := c.Param("trade_id")
 
 		clearingResponse, err := h.service.ClearTrade(tradeID)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-
-		c.JSON(http.StatusOK, clearingResponse)
+		response.Handle(c, clearingResponse, err)
 	}
 }
 
@@ -551,11 +546,6 @@ func (h *GinHandlers) GetClearingStatusHandler() gin.HandlerFunc {
 		clearingID := c.Param("clearing_id")
 
 		clearingResponse, err := h.service.GetClearingStatus(clearingID)
-		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "clearing not found"})
-			return
-		}
-
-		c.JSON(http.StatusOK, clearingResponse)
+		response.Handle(c, clearingResponse, err)
 	}
 }

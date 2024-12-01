@@ -2,13 +2,13 @@ package middleware
 
 import (
 	"fmt"
-	"net/http"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/ksred/klear-api/pkg/response"
 	"golang.org/x/time/rate"
 )
 
@@ -86,13 +86,7 @@ func RateLimit() gin.HandlerFunc {
 
 		limiter := getLimiter(c.FullPath(), clientID)
 		if !limiter.Allow() {
-			c.JSON(http.StatusTooManyRequests, gin.H{
-				"success": false,
-				"error": gin.H{
-					"code":    "RATE_LIMIT_EXCEEDED",
-					"message": "Rate limit exceeded. Please try again later.",
-				},
-			})
+			response.BadRequest(c, "Rate limit exceeded. Please try again later.")
 			c.Abort()
 			return
 		}
@@ -103,60 +97,50 @@ func RateLimit() gin.HandlerFunc {
 
 func JWTAuth() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		clientID, err := validateAndExtractToken(c)
-		if err != nil {
+		authHeader := c.GetHeader("Authorization")
+		if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
+			response.Unauthorized(c, "Missing or invalid authorization header")
+			c.Abort()
 			return
 		}
 
-		c.Set("clientID", clientID)
-		c.Next()
-	}
-}
-
-func validateAndExtractToken(c *gin.Context) (string, error) {
-	authHeader := c.GetHeader("Authorization")
-	if authHeader == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "authorization header required"})
-		c.Abort()
-		return "", fmt.Errorf("authorization header required")
-	}
-
-	bearerToken := strings.Split(authHeader, " ")
-	if len(bearerToken) != 2 || strings.ToLower(bearerToken[0]) != "bearer" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid authorization header format"})
-		c.Abort()
-		return "", fmt.Errorf("invalid authorization header format")
-	}
-
-	tokenString := bearerToken[1]
-	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-		// Verify signing method
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		bearerToken := strings.Split(authHeader, " ")
+		if len(bearerToken) != 2 || strings.ToLower(bearerToken[0]) != "bearer" {
+			response.Unauthorized(c, "Invalid authorization header format")
+			c.Abort()
+			return
 		}
 
-		// TODO: Move this to configuration
-		return []byte("klear-secret-key"), nil
-	})
+		tokenString := bearerToken[1]
+		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+			// Verify signing method
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+			}
 
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
-		c.Abort()
-		return "", fmt.Errorf("invalid token")
+			// TODO: Move this to configuration
+			return []byte("klear-secret-key"), nil
+		})
+
+		if err != nil {
+			response.Unauthorized(c, "Invalid token")
+			c.Abort()
+			return
+		}
+
+		claims, ok := token.Claims.(jwt.MapClaims)
+		if !ok || !token.Valid {
+			response.Unauthorized(c, "Invalid token claims")
+			c.Abort()
+			return
+		}
+
+		// Store claims in context for later use
+		c.Set("clientID", claims["client_id"])
+		c.Set("claims", claims)
+
+		c.Next()
 	}
-
-	claims, ok := token.Claims.(jwt.MapClaims)
-	if !ok || !token.Valid {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token claims"})
-		c.Abort()
-		return "", fmt.Errorf("invalid token claims")
-	}
-
-	// Store claims in context for later use
-	c.Set("clientID", claims["client_id"])
-	c.Set("claims", claims)
-
-	return claims["client_id"].(string), nil
 }
 
 func InternalAuth() gin.HandlerFunc {
@@ -174,4 +158,50 @@ func InternalAuth() gin.HandlerFunc {
 		c.Set("clientID", clientID)
 		c.Next()
 	}
+}
+
+func validateAndExtractToken(c *gin.Context) (string, error) {
+	authHeader := c.GetHeader("Authorization")
+	if authHeader == "" {
+		response.Unauthorized(c, "Authorization header required")
+		c.Abort()
+		return "", fmt.Errorf("authorization header required")
+	}
+
+	bearerToken := strings.Split(authHeader, " ")
+	if len(bearerToken) != 2 || strings.ToLower(bearerToken[0]) != "bearer" {
+		response.Unauthorized(c, "Invalid authorization header format")
+		c.Abort()
+		return "", fmt.Errorf("invalid authorization header format")
+	}
+
+	tokenString := bearerToken[1]
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+		return []byte("klear-secret-key"), nil
+	})
+
+	if err != nil {
+		response.Unauthorized(c, "Invalid token")
+		c.Abort()
+		return "", fmt.Errorf("invalid token: %w", err)
+	}
+
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok || !token.Valid {
+		response.Unauthorized(c, "Invalid token claims")
+		c.Abort()
+		return "", fmt.Errorf("invalid token claims")
+	}
+
+	clientID, ok := claims["client_id"].(string)
+	if !ok {
+		response.Unauthorized(c, "Invalid client ID in token")
+		c.Abort()
+		return "", fmt.Errorf("invalid client ID in token")
+	}
+
+	return clientID, nil
 }

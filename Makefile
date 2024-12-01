@@ -1,4 +1,4 @@
-.PHONY: all build clean run test test-coverage lint help
+.PHONY: all build clean run test test-coverage lint help simulate
 
 # Go parameters
 BINARY_NAME=klear-api
@@ -21,6 +21,7 @@ help:
 	@echo "  make lint           - Run linters"
 	@echo "  make all            - Clean, lint, test, and build"
 	@echo "  make help           - Show this help message"
+	@echo "  make simulate       - Run the simulation"
 
 build:
 	@echo "Building..."
@@ -77,3 +78,7 @@ watch:
 		echo "fswatch not installed. Please install fswatch to use watch mode."; \
 		exit 1; \
 	fi 
+
+simulate: build
+	@echo "Running simulation..."
+	@go run cmd/simulation/main.go

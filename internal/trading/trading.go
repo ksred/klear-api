@@ -1,13 +1,13 @@
 package trading
 
 import (
-	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/ksred/klear-api/internal/exchange"
 	"github.com/ksred/klear-api/internal/types"
+	"github.com/ksred/klear-api/pkg/response"
 	"gorm.io/gorm"
 )
 
@@ -112,22 +112,22 @@ func (h *GinHandlers) CreateOrderHandler() gin.HandlerFunc {
 		// Get idempotency key from header
 		idempotencyKey := c.GetHeader("Idempotency-Key")
 		if idempotencyKey == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Idempotency-Key header is required"})
+			response.BadRequest(c, "Idempotency-Key header is required")
 			return
 		}
 
 		var order types.Order
 		if err := c.ShouldBindJSON(&order); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			response.BadRequest(c, err.Error())
 			return
 		}
 
 		if err := h.service.CreateOrder(&order, idempotencyKey); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			response.InternalError(c, err.Error())
 			return
 		}
 
-		c.JSON(http.StatusCreated, order)
+		response.Success(c, order)
 	}
 }
 
@@ -137,11 +137,11 @@ func (h *GinHandlers) GetOrderStatusHandler() gin.HandlerFunc {
 
 		order, err := h.service.GetOrder(orderID)
 		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Order not found"})
+			response.NotFound(c, "Order not found")
 			return
 		}
 
-		c.JSON(http.StatusOK, order)
+		response.Success(c, order)
 	}
 }
 
@@ -150,7 +150,7 @@ func (h *GinHandlers) ExecuteOrderHandler() gin.HandlerFunc {
 		// Get idempotency key from header
 		idempotencyKey := c.GetHeader("Idempotency-Key")
 		if idempotencyKey == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Idempotency-Key header is required"})
+			response.BadRequest(c, "Idempotency-Key header is required")
 			return
 		}
 
@@ -158,10 +158,10 @@ func (h *GinHandlers) ExecuteOrderHandler() gin.HandlerFunc {
 
 		execution, err := h.service.ExecuteOrder(orderID, idempotencyKey)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			response.InternalError(c, err.Error())
 			return
 		}
 
-		c.JSON(http.StatusOK, execution)
+		response.Success(c, execution)
 	}
 }

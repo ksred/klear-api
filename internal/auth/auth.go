@@ -2,11 +2,11 @@ package auth
 
 import (
 	"errors"
-	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/ksred/klear-api/pkg/response"
 )
 
 var (
@@ -139,21 +139,16 @@ func (h *GinHandlers) GenerateTokenHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var creds Credentials
 		if err := c.ShouldBindJSON(&creds); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+			response.BadRequest(c, "Invalid request body")
 			return
 		}
 
 		token, err := h.service.GenerateToken(creds)
-		if err != nil {
-			status := http.StatusInternalServerError
-			if err == ErrInvalidCredentials {
-				status = http.StatusUnauthorized
-			}
-			c.JSON(status, gin.H{"error": err.Error()})
+		if err == ErrInvalidCredentials {
+			response.Unauthorized(c, err.Error())
 			return
 		}
-
-		c.JSON(http.StatusOK, token)
+		response.Handle(c, token, err)
 	}
 }
 

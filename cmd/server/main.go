@@ -76,9 +76,15 @@ func main() {
 	// Setup API routes
 	setupRoutes(router, authHandlers, tradingHandlers, clearingHandlers, settlementHandlers)
 
+	// Get port from env otherwise it's 8080
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+
 	// Create server
 	srv := &http.Server{
-		Addr:    ":8080",
+		Addr:    ":" + port,
 		Handler: router,
 	}
 
