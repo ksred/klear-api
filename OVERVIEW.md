@@ -3,6 +3,8 @@
 ## Overview
 This system provides a distributed execution, clearing, and settlement infrastructure for trading securities. It simulates the complete lifecycle of a trade from order submission through execution, clearing, and final settlement, while maintaining security and data consistency across all operations.
 
+For simplicity, this is currently presented as a single service. If required in a production implementation, this service would be split out into several smaller services.
+
 ## System Flow
 1. Client submits trade order through public API
 2. System validates order and client details
@@ -15,6 +17,8 @@ This system provides a distributed execution, clearing, and settlement infrastru
 - Public subnet: Handles order submission and status inquiries
 - Private subnet: Manages execution, clearing, and settlement operations
 - API Gateway: Routes and secures all public endpoints
+
+Note: Implementation in this project assumes it is sitting behind an API gateway. We are using a combination of API keys, secrets and JWT tokens for authentication. The same test values are used for both public and private endpoints. We assume that some third party is calling the internal APIs, and this third-party could be the service itself. For now, we call it manually. The service could, of course, not call a private API and instead run the functions directly.
 
 ## Client Details
 ### Base Information

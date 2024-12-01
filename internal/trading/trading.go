@@ -1,6 +1,7 @@
 package trading
 
 import (
+	"errors"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -11,10 +12,12 @@ import (
 	"gorm.io/gorm"
 )
 
+// Service handles trading operations and order management
 type Service struct {
 	db *Database
 }
 
+// NewService creates a new trading service with the given database connection
 func NewService(gormDB *gorm.DB) *Service {
 	return &Service{
 		db: NewDatabase(gormDB),
@@ -22,16 +25,23 @@ func NewService(gormDB *gorm.DB) *Service {
 }
 
 // CreateOrder creates a new order with idempotency support
+// It checks for existing orders with the same idempotency key and returns the existing order if found
+// Parameters:
+//   - order: The order to create
+//   - idempotencyKey: Unique key to prevent duplicate order creation
 func (s *Service) CreateOrder(order *types.Order, idempotencyKey string) error {
 	// Check for existing idempotency record
 	record, err := s.db.GetIdempotencyRecord(idempotencyKey)
 
 	// If record exists and hasn't expired
-	if err == nil && record.ExpiresAt.After(time.Now()) {
+	if err == nil && record.ExpiresAt.After(time.Now()) && record != nil {
 		// Return existing order
 		existingOrder, err := s.db.GetOrder(record.ResourceID)
 		if err != nil {
 			return err
+		}
+		if existingOrder == nil {
+			return errors.New("order not found")
 		}
 		*order = *existingOrder
 		return nil
@@ -46,18 +56,22 @@ func (s *Service) CreateOrder(order *types.Order, idempotencyKey string) error {
 	return s.db.CreateOrderWithIdempotency(order, idempotencyKey)
 }
 
-// GetOrder retrieves an order by ID
+// GetOrder retrieves an order by its ID
 func (s *Service) GetOrder(orderID string) (*types.Order, error) {
 	return s.db.GetOrder(orderID)
 }
 
 // ExecuteOrder executes an existing order with idempotency support
+// It routes the order to available exchanges and records the execution results
+// Parameters:
+//   - orderID: ID of the order to execute
+//   - idempotencyKey: Unique key to prevent duplicate execution
 func (s *Service) ExecuteOrder(orderID string, idempotencyKey string) (*types.Execution, error) {
 	// Check for existing idempotency record
 	record, err := s.db.GetIdempotencyRecord(idempotencyKey)
 
 	// If record exists and hasn't expired
-	if err == nil && record.ExpiresAt.After(time.Now()) {
+	if err == nil && record.ExpiresAt.After(time.Now()) && record != nil {
 		// Return existing execution
 		existingExecution, err := s.db.GetExecution(record.ResourceID)
 		if err != nil {
@@ -67,7 +81,7 @@ func (s *Service) ExecuteOrder(orderID string, idempotencyKey string) (*types.Ex
 	}
 
 	order, err := s.db.GetOrder(orderID)
-	if err != nil {
+	if err != nil || order == nil {
 		return nil, err
 	}
 
@@ -101,12 +115,16 @@ type GinHandlers struct {
 	service *Service
 }
 
+// NewGinHandlers creates a new set of HTTP handlers for trading endpoints
 func NewGinHandlers(service *Service) *GinHandlers {
 	return &GinHandlers{
 		service: service,
 	}
 }
 
+// CreateOrderHandler handles POST requests to create new orders
+// Requires a valid JWT token and idempotency key in headers
+// Request body should contain the order details
 func (h *GinHandlers) CreateOrderHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Get idempotency key from header
@@ -131,12 +149,15 @@ func (h *GinHandlers) CreateOrderHandler() gin.HandlerFunc {
 	}
 }
 
+// GetOrderStatusHandler handles GET requests to retrieve order status
+// Requires a valid JWT token
+// URL parameter: order_id
 func (h *GinHandlers) GetOrderStatusHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		orderID := c.Param("order_id")
 
 		order, err := h.service.GetOrder(orderID)
-		if err != nil {
+		if err != nil || order == nil {
 			response.NotFound(c, "Order not found")
 			return
 		}
@@ -145,6 +166,9 @@ func (h *GinHandlers) GetOrderStatusHandler() gin.HandlerFunc {
 	}
 }
 
+// ExecuteOrderHandler handles POST requests to execute orders
+// Requires internal authentication and idempotency key
+// URL parameter: order_id
 func (h *GinHandlers) ExecuteOrderHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Get idempotency key from header

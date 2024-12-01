@@ -21,6 +21,9 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// init configures the application logging based on environment settings
+// In development mode, it enables pretty printing with timestamps
+// Debug logging can be enabled via DEBUG environment variable
 func init() {
 	// Configure pretty logging for development
 	if os.Getenv("ENV") != "production" {
@@ -38,6 +41,8 @@ func init() {
 	}
 }
 
+// main initializes and runs the trading API server with graceful shutdown support
+// It sets up all required services, database connections, and API routes
 func main() {
 	// Initialize database
 	db, err := database.NewDatabase()
@@ -111,6 +116,17 @@ func main() {
 	zlog.Info().Msg("Server exiting")
 }
 
+// setupRoutes configures all API endpoints and their handlers
+// It groups routes by functionality and applies appropriate middleware:
+// - Auth routes: Public endpoints for authentication
+// - Order routes: Protected by JWT authentication
+// - Internal routes: Protected by internal network authentication
+// Parameters:
+//   - router: The main Gin router instance
+//   - authHandlers: Handlers for authentication endpoints
+//   - tradingHandlers: Handlers for order management
+//   - clearingHandlers: Handlers for trade clearing
+//   - settlementHandlers: Handlers for trade settlement
 func setupRoutes(
 	router *gin.Engine,
 	authHandlers *auth.GinHandlers,

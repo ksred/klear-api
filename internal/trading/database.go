@@ -1,6 +1,7 @@
 package trading
 
 import (
+	"errors"
 	"time"
 
 	"github.com/ksred/klear-api/internal/types"
@@ -22,6 +23,9 @@ func (d *Database) CreateOrder(order *types.Order) error {
 func (d *Database) GetOrder(orderID string) (*types.Order, error) {
 	var order types.Order
 	if err := d.db.Where("order_id = ?", orderID).First(&order).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
 		return nil, err
 	}
 	return &order, nil
@@ -85,6 +89,9 @@ func (d *Database) CreateOrderWithIdempotency(order *types.Order, idempotencyKey
 func (d *Database) GetIdempotencyRecord(key string) (*IdempotencyRecord, error) {
 	var record IdempotencyRecord
 	if err := d.db.Where("idempotency_key = ?", key).First(&record).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return &record, nil
+		}
 		return nil, err
 	}
 	return &record, nil
@@ -123,7 +130,3 @@ func (d *Database) CreateExecutionWithIdempotency(execution *types.Execution, id
 
 	return tx.Commit().Error
 }
-
-
-
-

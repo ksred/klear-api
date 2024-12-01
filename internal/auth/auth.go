@@ -39,14 +39,14 @@ type Claims struct {
 	Permissions []string `json:"permissions"`
 }
 
-// Service handles authentication operations
+// Service handles authentication and authorization operations
 type Service struct {
 	jwtSecret []byte
 	// In a real implementation, this would be replaced with a database
 	apiCredentials map[string]string // map[APIKey]APISecret
 }
 
-// NewService creates a new authentication service
+// NewService creates a new authentication service with the given JWT secret
 func NewService(jwtSecret string) *Service {
 	return &Service{
 		jwtSecret: []byte(jwtSecret),
@@ -56,6 +56,7 @@ func NewService(jwtSecret string) *Service {
 }
 
 // GenerateToken generates a JWT token for valid API credentials
+// The token includes client ID and permissions with 24-hour expiration
 func (s *Service) GenerateToken(creds Credentials) (*TokenResponse, error) {
 	// Verify API credentials
 	if !s.validateCredentials(creds) {
@@ -92,6 +93,7 @@ func (s *Service) GenerateToken(creds Credentials) (*TokenResponse, error) {
 }
 
 // ValidateToken validates a JWT token and returns the claims
+// Verifies token signature and expiration
 func (s *Service) ValidateToken(tokenString string) (*Claims, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
@@ -122,19 +124,20 @@ func (s *Service) RegisterAPICredentials(apiKey, apiSecret string) {
 	s.apiCredentials[apiKey] = apiSecret
 }
 
-// GinHandlers contains HTTP handlers for auth endpoints
+// GinHandlers contains HTTP handlers for authentication endpoints
 type GinHandlers struct {
 	service *Service
 }
 
-// NewGinHandlers creates new HTTP handlers for auth endpoints
+// NewGinHandlers creates a new set of HTTP handlers for authentication endpoints
 func NewGinHandlers(service *Service) *GinHandlers {
 	return &GinHandlers{
 		service: service,
 	}
 }
 
-// GenerateTokenHandler handles the token generation HTTP request
+// GenerateTokenHandler handles POST requests to generate JWT tokens
+// Request body should contain API credentials
 func (h *GinHandlers) GenerateTokenHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var creds Credentials

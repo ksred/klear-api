@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"math/rand"
 	"net/http"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -36,6 +38,7 @@ var (
 	sides   = []string{"BUY", "SELL"}
 )
 
+// init configures the logger for the simulation with pretty printing and timestamp
 func init() {
 	// Configure pretty logging
 	output := zerolog.ConsoleWriter{
@@ -45,12 +48,64 @@ func init() {
 	log.Logger = zerolog.New(output).With().Timestamp().Logger()
 }
 
+// routeStats tracks performance statistics for an API endpoint
+type routeStats struct {
+	name        string
+	durations   []time.Duration
+	totalCalls  int
+	failures    int
+}
+
+// addDuration records a new duration measurement for the route
+func (rs *routeStats) addDuration(d time.Duration) {
+	rs.durations = append(rs.durations, d)
+	rs.totalCalls++
+}
+
+// calculate computes performance statistics from recorded durations
+// Returns min, max, mean, median, 95th percentile, and 99th percentile durations
+func (rs *routeStats) calculate() (min, max, mean, median, p95, p99 time.Duration) {
+	if len(rs.durations) == 0 {
+		return 0, 0, 0, 0, 0, 0
+	}
+
+	// Sort durations for percentile calculations
+	sort.Slice(rs.durations, func(i, j int) bool {
+		return rs.durations[i] < rs.durations[j]
+	})
+
+	min = rs.durations[0]
+	max = rs.durations[len(rs.durations)-1]
+
+	// Calculate mean
+	var sum time.Duration
+	for _, d := range rs.durations {
+		sum += d
+	}
+	mean = sum / time.Duration(len(rs.durations))
+
+	// Calculate median
+	median = rs.durations[len(rs.durations)/2]
+
+	// Calculate percentiles
+	p95idx := int(math.Ceil(float64(len(rs.durations))*0.95)) - 1
+	p99idx := int(math.Ceil(float64(len(rs.durations))*0.99)) - 1
+	p95 = rs.durations[p95idx]
+	p99 = rs.durations[p99idx]
+
+	return
+}
+
+// simulationClient handles HTTP communication with the trading API
 type simulationClient struct {
 	baseURL   string
 	authToken string
 	client    *http.Client
+	stats     map[string]*routeStats
 }
 
+// newSimulationClient creates and initializes a new simulation client
+// It authenticates with the API and prepares performance tracking
 func newSimulationClient() (*simulationClient, error) {
 	// Create HTTP client with timeout
 	client := &http.Client{
@@ -60,6 +115,14 @@ func newSimulationClient() (*simulationClient, error) {
 	sc := &simulationClient{
 		baseURL: serverAddress,
 		client:  client,
+		stats: map[string]*routeStats{
+			"auth":       {name: "Authentication"},
+			"create":     {name: "Create Order"},
+			"execute":    {name: "Execute Order"},
+			"get":        {name: "Get Order"},
+			"clear":      {name: "Clear Trade"},
+			"settle":     {name: "Settle Trade"},
+		},
 	}
 
 	// Get auth token
@@ -72,7 +135,13 @@ func newSimulationClient() (*simulationClient, error) {
 	return sc, nil
 }
 
+// authenticate performs API authentication and returns a JWT token
 func (sc *simulationClient) authenticate() (string, error) {
+	start := time.Now()
+	defer func() {
+		sc.stats["auth"].addDuration(time.Since(start))
+	}()
+
 	credentials := map[string]string{
 		"api_key":    auth.TestAPIKey,
 		"api_secret": auth.TestAPISecret,
@@ -107,7 +176,14 @@ func (sc *simulationClient) authenticate() (string, error) {
 	return result.Token, nil
 }
 
+// createOrder submits a new order to the API
+// Returns the order ID on success
 func (sc *simulationClient) createOrder(order *types.Order) (string, error) {
+	start := time.Now()
+	defer func() {
+			sc.stats["create"].addDuration(time.Since(start))
+	}()
+
 	body, err := json.Marshal(order)
 	if err != nil {
 		return "", err
@@ -161,7 +237,14 @@ func (sc *simulationClient) createOrder(order *types.Order) (string, error) {
 	return result.Data.OrderID, nil
 }
 
+// executeOrder triggers execution of an existing order
+// Returns execution details on success
 func (sc *simulationClient) executeOrder(orderID string) (*types.Execution, error) {
+	start := time.Now()
+	defer func() {
+		sc.stats["execute"].addDuration(time.Since(start))
+	}()
+
 	// Add validation for empty orderID
 	if orderID == "" {
 		return nil, fmt.Errorf("orderID cannot be empty")
@@ -211,7 +294,13 @@ func (sc *simulationClient) executeOrder(orderID string) (*types.Execution, erro
 	return &result.Data, nil
 }
 
+// getOrder retrieves the current status of an order
 func (sc *simulationClient) getOrder(orderID string) (*types.Order, error) {
+	start := time.Now()
+	defer func() {
+		sc.stats["get"].addDuration(time.Since(start))
+	}()
+
 	req, err := http.NewRequest(
 		"GET",
 		fmt.Sprintf("%s/api/v1/orders/%s", sc.baseURL, orderID),
@@ -250,7 +339,14 @@ func (sc *simulationClient) getOrder(orderID string) (*types.Order, error) {
 	return &result.Data, nil
 }
 
+// clearTrade initiates clearing for an executed trade
+// Returns clearing details on success
 func (sc *simulationClient) clearTrade(execID string) (*types.ClearingResponse, error) {
+	start := time.Now()
+	defer func() {
+		sc.stats["clear"].addDuration(time.Since(start))
+	}()
+
 	req, err := http.NewRequest(
 		"POST",
 		fmt.Sprintf("%s/api/v1/internal/clearing/%s", sc.baseURL, execID),
@@ -294,7 +390,14 @@ func (sc *simulationClient) clearTrade(execID string) (*types.ClearingResponse, 
 	return &result.Data, nil
 }
 
+// settleTrade initiates settlement for a cleared trade
+// Returns settlement details on success
 func (sc *simulationClient) settleTrade(execID string) (*types.SettlementResponse, error) {
+	start := time.Now()
+	defer func() {
+		sc.stats["settle"].addDuration(time.Since(start))
+	}()
+
 	req, err := http.NewRequest(
 		"POST",
 		fmt.Sprintf("%s/api/v1/internal/settlement/%s", sc.baseURL, execID),
@@ -338,6 +441,32 @@ func (sc *simulationClient) settleTrade(execID string) (*types.SettlementRespons
 	return &result.Data, nil
 }
 
+// printPerformanceStats outputs formatted performance statistics for all API endpoints
+func (sc *simulationClient) printPerformanceStats() {
+	fmt.Println("\n📊 API Performance Statistics")
+	fmt.Println(strings.Repeat("-", 100))
+	fmt.Printf("%-20s %10s %10s %10s %10s %10s %10s %10s %10s\n",
+		"Endpoint", "Calls", "Errors", "Min", "Max", "Mean", "Median", "P95", "P99")
+	fmt.Println(strings.Repeat("-", 100))
+
+	for _, stats := range sc.stats {
+		min, max, mean, median, p95, p99 := stats.calculate()
+		fmt.Printf("%-20s %10d %10d %10s %10s %10s %10s %10s %10s\n",
+			stats.name,
+			stats.totalCalls,
+			stats.failures,
+			min.Round(time.Millisecond),
+			max.Round(time.Millisecond),
+			mean.Round(time.Millisecond),
+			median.Round(time.Millisecond),
+			p95.Round(time.Millisecond),
+			p99.Round(time.Millisecond))
+	}
+	fmt.Println(strings.Repeat("-", 100))
+}
+
+// main runs the trading simulation
+// It starts a local API server and simulates multiple concurrent trading clients
 func main() {
 	// Start the server in a goroutine
 	go func() {
@@ -530,8 +659,13 @@ Duration:         %v
 		Float64("total_value", stats.TotalValue).
 		Dur("duration", duration).
 		Msg("Simulation completed")
+
+	// Add this before the final success rate calculation
+	simClient.printPerformanceStats()
 }
 
+// createOrdersHTTP generates and submits random orders to the API
+// Runs as a worker goroutine, sending created order IDs to ordersChan
 func createOrdersHTTP(workerID, numOrders int, simClient *simulationClient, ordersChan chan<- string) {
 	for i := 0; i < numOrders; i++ {
 		order := &types.Order{
@@ -568,6 +702,8 @@ func createOrdersHTTP(workerID, numOrders int, simClient *simulationClient, orde
 	}
 }
 
+// startServer initializes and starts the trading API server
+// Sets up all required services, handlers and routes
 func startServer() error {
 	// Initialize database
 	db, err := database.NewDatabase()
@@ -598,6 +734,8 @@ func startServer() error {
 	return router.Run(":8080")
 }
 
+// setupRoutes configures all API endpoints and their handlers
+// Groups routes by functionality and applies appropriate middleware
 func setupRoutes(
 	router *gin.Engine,
 	authHandlers *auth.GinHandlers,

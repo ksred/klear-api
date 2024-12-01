@@ -13,10 +13,12 @@ import (
 	"gorm.io/gorm"
 )
 
+// Service handles trade settlement operations
 type Service struct {
 	db *Database
 }
 
+// NewService creates a new settlement service with the given database connection
 func NewService(gormDB *gorm.DB) *Service {
 	return &Service{
 		db: NewDatabase(gormDB),
@@ -24,6 +26,10 @@ func NewService(gormDB *gorm.DB) *Service {
 }
 
 // SettleTrade handles the settlement process for a trade
+// It validates the trade, calculates settlement amounts and fees,
+// and creates settlement records with T+2 settlement dates
+// Parameters:
+//   - tradeID: ID of the trade to settle
 func (s *Service) SettleTrade(tradeID string) (*SettlementResponse, error) {
 	logger := log.With().
 		Str("trade_id", tradeID).
@@ -113,6 +119,7 @@ func (s *Service) SettleTrade(tradeID string) (*SettlementResponse, error) {
 }
 
 // validateSettlement performs validation checks on the settlement
+// Verifies settlement amount, dates, and market hours
 func (s *Service) validateSettlement(settlement *Settlement, order *types.Order) error {
 	logger := log.With().
 		Str("settlement_id", settlement.SettlementID).
@@ -168,12 +175,16 @@ type GinHandlers struct {
 	service *Service
 }
 
+// NewGinHandlers creates a new set of HTTP handlers for settlement endpoints
 func NewGinHandlers(service *Service) *GinHandlers {
 	return &GinHandlers{
 		service: service,
 	}
 }
 
+// SettleTradeHandler handles POST requests to settle trades
+// Requires internal authentication
+// URL parameter: trade_id
 func (h *GinHandlers) SettleTradeHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		tradeID := c.Param("trade_id")
@@ -183,6 +194,9 @@ func (h *GinHandlers) SettleTradeHandler() gin.HandlerFunc {
 	}
 }
 
+// GetSettlementHandler handles GET requests to retrieve settlement details
+// Requires internal authentication
+// URL parameter: settlement_id
 func (h *GinHandlers) GetSettlementHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		settlementID := c.Param("settlement_id")

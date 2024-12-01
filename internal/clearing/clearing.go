@@ -15,10 +15,12 @@ import (
 	"gorm.io/gorm"
 )
 
+// Service handles trade clearing operations
 type Service struct {
 	db *Database
 }
 
+// NewService creates a new clearing service with the given database connection
 func NewService(gormDB *gorm.DB) *Service {
 	return &Service{
 		db: NewDatabase(gormDB),
@@ -32,6 +34,9 @@ const (
 )
 
 // ClearTrade handles the clearing process for a trade
+// It performs trade netting, calculates margins, and validates clearing rules
+// Parameters:
+//   - tradeID: ID of the trade to clear
 func (s *Service) ClearTrade(tradeID string) (*ClearingResponse, error) {
 	logger := log.With().
 		Str("trade_id", tradeID).
@@ -146,6 +151,7 @@ func (s *Service) ClearTrade(tradeID string) (*ClearingResponse, error) {
 }
 
 // calculateTradeNetting performs multilateral netting for trades
+// Groups trades by symbol within the netting window and calculates net positions
 func (s *Service) calculateTradeNetting(execution *types.Execution, order *types.Order) (*TradeNetting, error) {
 	logger := log.With().
 		Str("execution_id", execution.ExecutionID).
@@ -317,6 +323,7 @@ func (s *Service) processClearingCalculations(clearing *Clearing, execution *typ
 }
 
 // validateClearing performs validation checks on the clearing
+// Verifies position limits, margin requirements, and risk thresholds
 func (s *Service) validateClearing(clearing *Clearing, order *types.Order) error {
 	logger := log.With().
 		Str("clearing_id", clearing.ClearingID).
@@ -526,12 +533,16 @@ type GinHandlers struct {
 	service *Service
 }
 
+// NewGinHandlers creates a new set of HTTP handlers for clearing endpoints
 func NewGinHandlers(service *Service) *GinHandlers {
 	return &GinHandlers{
 		service: service,
 	}
 }
 
+// ClearTradeHandler handles POST requests to clear trades
+// Requires internal authentication
+// URL parameter: trade_id
 func (h *GinHandlers) ClearTradeHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		tradeID := c.Param("trade_id")
