@@ -27,8 +27,7 @@ Response: 200 OK
 }
 ```
 
-Error Responses:
-401 Unauthorized
+Error Response: 401 Unauthorized
 ```json
 {
     "success": false,
@@ -39,7 +38,7 @@ Error Responses:
 }
 ```
 
-400 Bad Request
+Error Response: 400 Bad Request
 ```json
 {
     "success": false,
@@ -50,7 +49,7 @@ Error Responses:
 }
 ```
 
-500 Internal Server Error
+Error Response: 500 Internal Server Error
 ```json
 {
     "success": false,
@@ -100,8 +99,7 @@ Response: 201 Created
 }
 ```
 
-Error Responses:
-400 Bad Request
+Error Response: 400 Bad Request
 ```json
 {
     "success": false,
@@ -120,27 +118,34 @@ Authorization: Bearer <jwt_token>
 Response: 200 OK
 ```json
 {
-    "order_id": "string",
-    "client_id": "string",
-    "symbol": "string",
-    "side": "string",
-    "order_type": "string",
-    "quantity": number,
-    "price": number,
-    "status": "PENDING" | "FILLED" | "CANCELLED",
-    "created_at": "string",
-    "updated_at": "string"
+    "success": true,
+    "data": {
+        "order_id": "string",
+        "client_id": "string",
+        "symbol": "string",
+        "side": "string",
+        "order_type": "string",
+        "quantity": number,
+        "price": number,
+        "status": "PENDING" | "FILLED" | "CANCELLED",
+        "created_at": "string",
+        "updated_at": "string"
+    }
 }
 ```
 
-Error Responses:
-404 Not Found - Order not found
-401 Unauthorized - Invalid/missing token
-500 Internal Server Error - Server error
+Error Response: 404 Not Found
+```json
+{
+    "success": false,
+    "error": {
+        "code": "NOT_FOUND",
+        "message": "Order not found"
+    }
+}
+```
 
 ## Internal Endpoints
-
-These endpoints are for internal system use and should not be exposed publicly.
 
 ### Execute Order
 
@@ -150,20 +155,19 @@ Idempotency-Key: <unique_key>
 Response: 200 OK
 ```json
 {
-    "execution_id": "string",
-    "order_id": "string",
-    "price": number,
-    "quantity": number,
-    "side": "string",
-    "status": "COMPLETED" | "FAILED",
-    "created_at": "string",
-    "updated_at": "string"
+    "success": true,
+    "data": {
+        "execution_id": "string",
+        "order_id": "string",
+        "price": number,
+        "quantity": number,
+        "side": "string",
+        "status": "COMPLETED" | "FAILED",
+        "created_at": "string",
+        "updated_at": "string"
+    }
 }
 ```
-
-Error Responses:
-404 Not Found - Order not found
-500 Internal Server Error - Execution failed
 
 ### Clear Trade
 
@@ -172,18 +176,17 @@ POST /api/v1/internal/clearing/{trade_id}
 Response: 200 OK
 ```json
 {
-    "clearing_id": "string",
-    "clearing_status": "PENDING" | "CLEARED" | "FAILED",
-    "margin_required": number,
-    "net_positions": number,
-    "settlement_amount": number,
-    "timestamp": "string"
+    "success": true,
+    "data": {
+        "clearing_id": "string",
+        "clearing_status": "PENDING" | "CLEARED" | "FAILED",
+        "margin_required": number,
+        "net_positions": number,
+        "settlement_amount": number,
+        "timestamp": "string"
+    }
 }
 ```
-
-Error Responses:
-404 Not Found - Trade not found
-500 Internal Server Error - Clearing failed
 
 ### Settle Trade
 
@@ -192,24 +195,23 @@ POST /api/v1/internal/settlement/{trade_id}
 Response: 200 OK
 ```json
 {
-    "settlement_id": "string",
-    "trade_id": "string",
-    "client_id": "string",
-    "settlement_status": "PENDING" | "SETTLING" | "SETTLED" | "FAILED",
-    "settlement_date": "string",
-    "final_amount": number,
-    "currency": "string",
-    "settlement_account": "string",
-    "executed_price": number,
-    "executed_quantity": number,
-    "settlement_fees": number,
-    "timestamp": "string"
+    "success": true,
+    "data": {
+        "settlement_id": "string",
+        "trade_id": "string",
+        "client_id": "string",
+        "settlement_status": "PENDING" | "SETTLING" | "SETTLED" | "FAILED",
+        "settlement_date": "string",
+        "final_amount": number,
+        "currency": "string",
+        "settlement_account": "string",
+        "executed_price": number,
+        "executed_quantity": number,
+        "settlement_fees": number,
+        "timestamp": "string"
+    }
 }
 ```
-
-Error Responses:
-404 Not Found - Trade not found
-500 Internal Server Error - Settlement failed
 
 ## Error Handling
 
@@ -238,6 +240,7 @@ Common HTTP Status Codes:
 - 201: Resource created successfully
 - 400: Bad request (invalid input)
 - 401: Unauthorized (invalid/missing authentication)
+- 403: Forbidden (insufficient permissions)
 - 404: Resource not found
 - 409: Conflict (duplicate resource)
 - 500: Internal server error
