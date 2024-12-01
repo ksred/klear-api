@@ -9,12 +9,15 @@ All authenticated endpoints require a JWT token obtained through the authenticat
 POST /api/v1/auth/token
 
 Request:
+```json
 {
     "api_key": "string",     // Your API key
     "api_secret": "string"   // Your API secret
 }
+```
 
 Response: 200 OK
+```json
 {
     "success": true,
     "data": {
@@ -22,9 +25,11 @@ Response: 200 OK
         "expiration": "string"   // ISO 8601 timestamp
     }
 }
+```
 
 Error Responses:
 401 Unauthorized
+```json
 {
     "success": false,
     "error": {
@@ -32,8 +37,10 @@ Error Responses:
         "message": "Invalid credentials"
     }
 }
+```
 
 400 Bad Request
+```json
 {
     "success": false,
     "error": {
@@ -41,8 +48,10 @@ Error Responses:
         "message": "Invalid request format"
     }
 }
+```
 
 500 Internal Server Error
+```json
 {
     "success": false,
     "error": {
@@ -50,6 +59,7 @@ Error Responses:
         "message": "An unexpected error occurred"
     }
 }
+```
 
 ## Trading Endpoints
 
@@ -60,6 +70,7 @@ Authorization: Bearer <jwt_token>
 Idempotency-Key: <unique_key>  // Required to prevent duplicate orders
 
 Request:
+```json
 {
     "client_id": "string",
     "symbol": "string",
@@ -68,8 +79,10 @@ Request:
     "quantity": number,
     "price": number
 }
+```
 
 Response: 201 Created
+```json
 {
     "success": true,
     "data": {
@@ -85,9 +98,11 @@ Response: 201 Created
         "updated_at": "string"
     }
 }
+```
 
 Error Responses:
 400 Bad Request
+```json
 {
     "success": false,
     "error": {
@@ -95,6 +110,7 @@ Error Responses:
         "message": "Invalid order details"
     }
 }
+```
 
 ### Get Order Status
 
@@ -102,6 +118,7 @@ GET /api/v1/orders/{order_id}
 Authorization: Bearer <jwt_token>
 
 Response: 200 OK
+```json
 {
     "order_id": "string",
     "client_id": "string",
@@ -114,6 +131,7 @@ Response: 200 OK
     "created_at": "string",
     "updated_at": "string"
 }
+```
 
 Error Responses:
 404 Not Found - Order not found
@@ -130,6 +148,7 @@ POST /api/v1/internal/execution/{order_id}
 Idempotency-Key: <unique_key>
 
 Response: 200 OK
+```json
 {
     "execution_id": "string",
     "order_id": "string",
@@ -140,6 +159,7 @@ Response: 200 OK
     "created_at": "string",
     "updated_at": "string"
 }
+```
 
 Error Responses:
 404 Not Found - Order not found
@@ -150,6 +170,7 @@ Error Responses:
 POST /api/v1/internal/clearing/{trade_id}
 
 Response: 200 OK
+```json
 {
     "clearing_id": "string",
     "clearing_status": "PENDING" | "CLEARED" | "FAILED",
@@ -158,6 +179,7 @@ Response: 200 OK
     "settlement_amount": number,
     "timestamp": "string"
 }
+```
 
 Error Responses:
 404 Not Found - Trade not found
@@ -168,6 +190,7 @@ Error Responses:
 POST /api/v1/internal/settlement/{trade_id}
 
 Response: 200 OK
+```json
 {
     "settlement_id": "string",
     "trade_id": "string",
@@ -182,6 +205,7 @@ Response: 200 OK
     "settlement_fees": number,
     "timestamp": "string"
 }
+```
 
 Error Responses:
 404 Not Found - Trade not found
@@ -190,7 +214,7 @@ Error Responses:
 ## Error Handling
 
 All endpoints follow a consistent error response format:
-
+```json
 {
     "success": false,
     "error": {
@@ -198,6 +222,7 @@ All endpoints follow a consistent error response format:
         "message": string  // Human-readable error message
     }
 }
+```
 
 Common Error Codes:
 - NOT_FOUND: Resource could not be found
@@ -225,8 +250,7 @@ API requests are rate-limited based on the client API key. The current limits ar
 - Status endpoints: 1000 requests per minute
 
 When rate limit is exceeded, the API will respond with:
-
-429 Too Many Requests
+```json
 {
     "success": false,
     "error": {
@@ -234,6 +258,7 @@ When rate limit is exceeded, the API will respond with:
         "message": "Rate limit exceeded. Please try again later."
     }
 }
+```
 
 ## Idempotency
 

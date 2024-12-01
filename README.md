@@ -85,7 +85,7 @@ The simulation will:
 - make watch - Run in development mode with auto-reload (requires fswatch)
 
 ### Project Structure
-
+```
 .
 ├── cmd/
 │   ├── server/     # Main application
@@ -102,6 +102,7 @@ The simulation will:
 │   ├── common/     # Shared utilities
 │   └── middleware/ # HTTP middleware
 └── configs/        # Configuration files
+```
 
 ## API Documentation
 
